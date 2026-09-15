@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notifications — Tuition O Job Media Admin</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0e3b36">
+<link rel="icon" href="/icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Baloo+Da+2:wght@600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --teal:#0e6b5c; --teal-deep:#0e3b36; --gold:#d4af37; --bg:#f5f3ee; --surface:#fff;
+    --line:#e3ddd0; --ink:#22302c; --ink-soft:#5c6b64;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Hind Siliguri',system-ui,sans-serif;}
+  .topbar{
+    background:var(--teal-deep);color:#fff;padding:16px 20px;display:flex;align-items:center;
+    justify-content:space-between;gap:12px;flex-wrap:wrap;
+  }
+  .topbar h1{font-family:'Baloo Da 2',sans-serif;font-size:19px;margin:0;}
+  .topbar a{color:#fff;text-decoration:none;font-size:13px;font-weight:600;opacity:.85;}
+  .topbar a:hover{opacity:1;}
+  .topbar-links{display:flex;gap:16px;align-items:center;}
+  .wrap{max-width:900px;margin:0 auto;padding:18px 14px 60px;}
+  .filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
+  .filter-btn{
+    padding:8px 16px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);
+    font-size:13px;font-weight:600;color:var(--ink-soft);cursor:pointer;
+  }
+  .filter-btn.active{background:var(--teal);border-color:var(--teal);color:#fff;}
+  .card{
+    background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;
+    margin-bottom:12px;
+  }
+  .card.highlight{outline:2px solid var(--gold);outline-offset:2px;}
+  .card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px;}
+  .kind-pill{
+    display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;
+    font-size:12px;font-weight:700;white-space:nowrap;
+  }
+  .kind-sos{background:#fde3e3;color:#a12a2a;}
+  .kind-money{background:#fdf1cf;color:#8a6b0f;}
+  .kind-unassigned_tuition{background:#e3ecfd;color:#2a4fa1;}
+  .kind-test{background:#e6e6e6;color:#555;}
+  .card-title{font-weight:700;font-size:15px;margin:0 0 3px;}
+  .card-time{font-size:12px;color:var(--ink-soft);white-space:nowrap;}
+  .card-body{font-size:13.5px;color:var(--ink);margin-bottom:10px;line-height:1.5;}
+  .info-row{display:flex;gap:8px;margin-bottom:6px;font-size:13px;line-height:1.5;}
+  .info-label{font-weight:700;min-width:80px;flex-shrink:0;color:var(--ink-soft);}
+  .info-label.why{color:#a12a2a;}
+  .info-label.todo{color:#0e6b5c;}
+  .delivery{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);font-size:12px;color:var(--ink-soft);}
+  .delivery.ok{color:#1a7a3d;}
+  .delivery.fail{color:#a12a2a;}
+  .empty-state, .loading-state{text-align:center;padding:60px 20px;color:var(--ink-soft);}
+  .refresh-btn{
+    padding:8px 16px;border-radius:8px;border:1.5px solid var(--line);background:var(--surface);
+    font-size:13px;font-weight:600;cursor:pointer;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>🔔 Notifications</h1>
+  <div class="topbar-links">
+    <a href="/admin.html">← Admin Panel</a>
+    <a href="/debug.html">🛠️ Debug</a>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="filters" id="filters">
+    <button class="filter-btn active" data-kind="">All</button>
+    <button class="filter-btn" data-kind="sos">🆘 SOS</button>
+    <button class="filter-btn" data-kind="money">💰 Money</button>
+    <button class="filter-btn" data-kind="unassigned_tuition">⏰ Unassigned Tuitions</button>
+    <button class="filter-btn" data-kind="test">🔔 Test</button>
+  </div>
+  <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+    <button class="refresh-btn" id="refreshBtn">Refresh</button>
+  </div>
+
+  <div class="loading-state" id="loadingState">Loading...</div>
+  <div class="empty-state" id="emptyState" style="display:none;">No notifications yet.</div>
+  <div id="list"></div>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://egsklbezrommbtyjyvak.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_Tfwl60leMKCgMVCpgqZPow_LyjxpgN9';
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let currentAdmin = null;
+  let currentKind = '';
+
+  (function loadSession(){
+    const saved = localStorage.getItem('tm_admin_session');
+    if(!saved){
+      document.body.innerHTML = '<div class="wrap"><div class="empty-state">Please <a href="/admin.html">log in</a> first.</div></div>';
+      return;
+    }
+    try{ currentAdmin = JSON.parse(saved); }catch(e){}
+    if(!currentAdmin || !currentAdmin.username){
+      document.body.innerHTML = '<div class="wrap"><div class="empty-state">Please <a href="/admin.html">log in</a> first.</div></div>';
+      return;
+    }
+    loadNotifications();
+  })();
+
+  function escapeHtml(s){
+    return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function timeAgo(iso){
+    if(!iso) return '—';
+    const d = new Date(iso);
+    const diffMs = Date.now() - d.getTime();
+    const mins = Math.floor(diffMs / 60000);
+    if(mins < 1) return 'just now';
+    if(mins < 60) return mins + 'm ago';
+    const hrs = Math.floor(mins / 60);
+    if(hrs < 24) return hrs + 'h ago';
+    const days = Math.floor(hrs / 24);
+    return days + 'd ago';
+  }
+
+  const KIND_LABELS = {
+    sos: '🆘 SOS',
+    money: '💰 Money',
+    unassigned_tuition: '⏰ Unassigned Tuition',
+    test: '🔔 Test'
+  };
+
+  async function loadNotifications(){
+    const loadingEl = document.getElementById('loadingState');
+    const emptyEl = document.getElementById('emptyState');
+    const listEl = document.getElementById('list');
+    loadingEl.style.display = 'block';
+    emptyEl.style.display = 'none';
+    listEl.innerHTML = '';
+    try{
+      const { data, error } = await sb.rpc('admin_list_notifications', {
+        p_admin_username: currentAdmin.username,
+        p_admin_password_hash: currentAdmin.password_hash,
+        p_limit: 150,
+        p_kind: currentKind || null
+      });
+      if(error) throw error;
+      loadingEl.style.display = 'none';
+      if(!data || !data.length){
+        emptyEl.style.display = 'block';
+        return;
+      }
+      renderList(data);
+    }catch(err){
+      console.error(err);
+      loadingEl.style.display = 'none';
+      emptyEl.style.display = 'block';
+      emptyEl.textContent = 'Failed to load notifications. ' + (err.message || '');
+    }
+  }
+
+  function renderList(rows){
+    const listEl = document.getElementById('list');
+    const params = new URLSearchParams(window.location.search);
+    const highlightId = params.get('highlight');
+
+    listEl.innerHTML = rows.map(function(r){
+      let deliveryHtml = '';
+      if(r.push_attempted_at){
+        const ok = (r.push_success_count || 0) > 0;
+        deliveryHtml = '<div class="delivery ' + (ok ? 'ok' : 'fail') + '">' +
+          (ok ? '✓ Delivered to ' + r.push_success_count + ' device(s)' : '✗ Delivery failed') +
+          (r.push_failure_count ? ' (' + r.push_failure_count + ' failure' + (r.push_failure_count > 1 ? 's' : '') + ')' : '') +
+          (r.push_error ? ' — ' + escapeHtml(r.push_error) : '') +
+          ' · sent ' + timeAgo(r.push_attempted_at) +
+        '</div>';
+      } else {
+        deliveryHtml = '<div class="delivery">⏳ Not sent yet — waiting for the next send-web-push run (runs every minute).</div>';
+      }
+
+      const isHighlighted = highlightId && String(r.id) === String(highlightId);
+
+      return '<div class="card' + (isHighlighted ? ' highlight' : '') + '" id="notif-' + r.id + '">' +
+        '<div class="card-head">' +
+          '<div>' +
+            '<span class="kind-pill kind-' + r.kind + '">' + (KIND_LABELS[r.kind] || r.kind) + '</span>' +
+          '</div>' +
+          '<div class="card-time">' + timeAgo(r.created_at) + '</div>' +
+        '</div>' +
+        '<div class="card-title">' + escapeHtml(r.title) + '</div>' +
+        '<div class="card-body">' + escapeHtml(r.body) + '</div>' +
+        '<div class="info-row"><span class="info-label why">Why:</span><span>' + escapeHtml(r.reason) + '</span></div>' +
+        '<div class="info-row"><span class="info-label todo">Do now:</span><span>' + escapeHtml(r.action_hint) + '</span></div>' +
+        deliveryHtml +
+      '</div>';
+    }).join('');
+
+    if(highlightId){
+      const el = document.getElementById('notif-' + highlightId);
+      if(el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  document.getElementById('refreshBtn').addEventListener('click', loadNotifications);
+
+  document.getElementById('filters').addEventListener('click', function(e){
+    const btn = e.target.closest('.filter-btn');
+    if(!btn) return;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentKind = btn.dataset.kind || '';
+    loadNotifications();
+  });
+
+  // Light auto-refresh so a page left open catches new notifications
+  // without a manual click.
+  setInterval(loadNotifications, 30000);
+</script>
+</body>
+</html>
