@@ -1,0 +1,26 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Sends any queued notifications (SOS, Money, unassigned-tuition reminders,
+# test pings) as Web Push messages to every registered admin device.
+# Runs every minute so a real SOS/Money event reaches the admin within
+# ~60 seconds of happening, not just whenever the 5-hour sweep runs.
+[functions."send-web-push"]
+  schedule = "* * * * *"
+
+# Checks every unassigned tuition and enqueues a "still unassigned"
+# notification for any that have gone 5+ hours without an update, then
+# again every 5 hours after that for as long as it stays unassigned.
+# Runs every 10 minutes -- frequent enough to stay close to "exactly 5h",
+# far cheaper than every minute.
+[functions."sweep-unassigned"]
+  schedule = "*/10 * * * *"
+
+# Repo root is the publish dir, so ignore these when Netlify decides
+# whether a push touched deployable content vs. just docs/tooling.
+[build.processing]
+  skip_processing = false
