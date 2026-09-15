@@ -1,0 +1,18 @@
+{
+  "name": "tuition-o-job-admin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tuition O Job Media -- admin panel PWA with Web Push notifications",
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "dependencies": {
+    "@netlify/functions": "^2.8.2",
+    "@supabase/supabase-js": "^2.45.4",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "@types/web-push": "^3.6.4",
+    "typescript": "^5.5.4"
+  }
+}
